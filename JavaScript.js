@@ -378,8 +378,11 @@ function sendOrderViaWhatsApp() {
   message += "--------------------------------------------\n";
 
   orders.forEach((order) => {
-    let price = parseFloat(order.price).toString(); // حذف الأصفار غير الضرورية
-    let totalPrice = parseFloat(order.totalPrice).toString(); // حذف الأصفار غير الضرورية
+    // let price = parseFloat(order.price).toString(); // حذف الأصفار غير الضرورية
+    // let totalPrice = parseFloat(order.totalPrice).toString(); // حذف الأصفار غير الضرورية
+    let price = isNaN(parseFloat(order.price)) ? "" : parseFloat(order.price).toFixed(2);
+    let totalPrice = isNaN(parseFloat(order.totalPrice)) ? "" : parseFloat(order.totalPrice).toFixed(2);
+
     message += `${order.name.padEnd(10)} | ${order.quantity
       .toString()
       .padEnd(6)} | ${price.padEnd(7)} | ${totalPrice.padEnd(7)}\n`;
