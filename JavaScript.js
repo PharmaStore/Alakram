@@ -5,7 +5,7 @@ google.charts.setOnLoadCallback(handleData);
 
 function handleData() {
     const spreadsheetId = "1M7WLnM9Dgbz-fzpoJmbW3DSC9Z-apul8qMD0mJjmB1U";
-    const range = "Sheet1!G1"; // نطاق الخلية
+    const range = "Sheet2!G1"; // نطاق الخلية
     const apiKey = "AIzaSyCUAGP16uXTJXugjn8wnjYrCSfyfRcfSns"; // أدخل مفتاح الـ API هنا
   
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`;
@@ -27,7 +27,7 @@ function handleData() {
   
           //  إذا لم تكن البيانات موجودة في SessionStorage، قم بتحميلها من Google Sheets
       var query = new google.visualization.Query(
-        "https://docs.google.com/spreadsheets/d/1M7WLnM9Dgbz-fzpoJmbW3DSC9Z-apul8qMD0mJjmB1U/gviz/tq?sheet=Sheet1"
+        "https://docs.google.com/spreadsheets/d/1M7WLnM9Dgbz-fzpoJmbW3DSC9Z-apul8qMD0mJjmB1U/gviz/tq?sheet=Sheet2"
       );
       query.send(handleProductQueryResponse);
         } else {
@@ -43,7 +43,7 @@ function handleData() {
             console.log("القيم مختلفة. تحديث البيانات من Google Sheets.");
             sessionStorage.setItem("initialTime", currentValue); // تحديث الوقت الأولي
             var query = new google.visualization.Query(
-              `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?sheet=Sheet1`
+              `https://docs.google.com/spreadsheets/d/${spreadsheetId}/gviz/tq?sheet=Sheet2`
             );
             query.send(handleProductQueryResponse);
           }
@@ -113,18 +113,30 @@ function initializeDataTable(rows) {
 
 // فتح نافذة الطلب
 function openOrderModal(button) {
+    const row = button.parentNode.parentNode;
+  // ملاحظة: نستخدم cells[3] للحصول على الكمية المتوفرة (عمود الكمية في الجدول)
+  const availableQuantity = parseInt(row.cells[2].innerHTML.trim()); 
+
   const productName = button.parentNode.parentNode.cells[1].innerHTML;
   const productPrice = button.parentNode.parentNode.cells[3].innerHTML; // الحصول على السعر
   const productDate = button.parentNode.parentNode.cells[0].innerHTML; // الحصول على التاريخ (تأكد من موقعه الصحيح)
 
-  document.getElementById(
-    "modalProductDate"
-  ).innerText = `Date: ${productDate}`;
+  document.getElementById("modalProductDate").innerText = `الانتهاء: ${productDate}`;
   // تعيين التاريخ في النافذة
   document.getElementById("modalProductName").innerText = productName;
+  document.getElementById("orderModal").dataset.price = productPrice; // تخزين السعر في بيانات النافذة
+  
+  document.getElementById("orderModal").dataset.availableQuantity = availableQuantity; // **جديد:** تخزين الكمية المتوفرة
+ 
+  // عرض النافذة
   document.getElementById("orderModal").style.display = "block";
   document.getElementById("overlay").classList.add("show");
-  document.getElementById("orderModal").dataset.price = productPrice; // تخزين السعر في بيانات النافذة
+
+   // إعادة تعيين قيمة حقل الكمية في النافذة إلى 1
+  document.getElementById("quantity").value = 1;
+
+    // إخفاء رسائل الخطأ القديمة إذا وجدت
+  document.getElementById("quantityError").style.display = 'none'; 
 }
 
 // إغلاق النافذة
@@ -135,38 +147,97 @@ function closeModal() {
 
 // إضافة الطلب
 function addToOrder() {
-  const productDate = document
-    .getElementById("modalProductDate")
-    .innerText.replace("Date: ", "");
-  // افترض أن تاريخ المنتج موجود هنا
+  const orderModal = document.getElementById("orderModal");
+
+  const productDate = document.getElementById("modalProductDate").innerText.replace("Date: ", ""); // افترض أن تاريخ المنتج موجود هنا
+  const availableQuantity = parseInt(orderModal.dataset.availableQuantity); // الكمية المتوفرة
+         console.log(" الكمية المتوفرة:", availableQuantity);
 
   const selectedProduct = document.getElementById("modalProductName").innerText;
-  const quantity = parseInt(document.getElementById("quantity").value);
-  const price = parseFloat(document.getElementById("orderModal").dataset.price);
-  const totalPrice = quantity * price;
+  // const quantity = parseInt(document.getElementById("quantity").value);
+  // const price = parseFloat(document.getElementById("orderModal").dataset.price);
+    const quantityInput = document.getElementById("quantity");
+  const requestedQuantity = parseInt(quantityInput.value); // الكمية المطلوبة
+
+  const price = parseFloat(orderModal.dataset.price);
+
+  const totalPrice = requestedQuantity * price;
 
   // إضافة الطلب إلى localStorage
   let orders = JSON.parse(localStorage.getItem("orders")) || [];
 
   let productExists = false;
 
-  // تحقق مما إذا كان المنتج وتاريخه موجودين مسبقًا
-  orders = orders.map((order) => {
-    if (order.name === selectedProduct && order.date === productDate) {
-      // إذا كان المنتج وتاريخه متطابقين، يتم تحديث الكمية والإجمالي
-      order.quantity += quantity;
-      order.totalPrice = order.quantity * order.price;
-      productExists = true;
-    }
-    return order;
-  });
+ // **منطق التحقق الجديد: التحقق اذا كانت الكمية المطلوبة متوفرة **
+//   if (requestedQuantity > availableQuantity) {
+//     // عرض رسالة الخطأ
+//     const errorElement = document.getElementById("quantityError");
+//     errorElement.innerText = `الكمية المطلوبة (${requestedQuantity}) أكبر من المتوفرة (${availableQuantity}).`;
+//     errorElement.style.display = 'block';
+//     
+//     // إعادة الكمية إلى الحد الأقصى المتوفر أو 1 إذا كان المتوفر 0
+//     quantityInput.value = availableQuantity > 0 ? availableQuantity : 1;
+//     
+//     return; // إيقاف الدالة ومنع الإضافة
+//   } else {
+//     // إخفاء رسالة الخطأ إذا كان التحقق ناجحاً
+//     document.getElementById("quantityError").style.display = 'none';
+//   }
+
+
+  let hasError = false; // علم جديد لتتبع حدوث خطأ ومنع الإغلاق
+
+  // **منطق التحقق الجديد والمعدل (يشمل الكمية السابقة):**
+  orders = orders.map((order) => {
+    if (order.name === selectedProduct && order.date === productDate) {
+      // وجدنا طلباً سابقاً لنفس الصنف بنفس التاريخ
+      const currentTotalQuantity = order.quantity;
+      const newTotalQuantity = currentTotalQuantity + requestedQuantity;
+         console.log(" الكمية المتوفرة 2:", currentTotalQuantity);
+
+      if (newTotalQuantity > availableQuantity) {
+        // إذا تجاوز المجموع الكمية المتوفرة، نمنع الإضافة ونعرض رسالة خطأ
+        const errorElement = document.getElementById("quantityError");
+        errorElement.innerText = `مجموع طلباتك لهذا الصنف (${newTotalQuantity}) يتجاوز الكمية المتوفرة (${availableQuantity}).`;
+        errorElement.style.display = 'block';
+        hasError = true; // تفعيل العلم بوجود خطأ
+        productExists = true; 
+        return order; // نُعيد الطلب السابق دون تعديل
+      }
+
+      // إذا كان متوفراً: تحديث الكمية والإجمالي
+      order.quantity = newTotalQuantity;
+      order.totalPrice = order.quantity * order.price;
+      productExists = true;
+    }
+    return order;
+  });
+  
+  // ******************************************************
+  // FIX: إذا حدث خطأ أثناء تحديث طلب موجود، نتوقف فوراً ونترك النافذة مفتوحة
+  if (hasError) {
+    return; 
+  }
+  // ******************************************************
 
   // إذا لم يكن المنتج بنفس التاريخ موجودًا، أضف طلبًا جديدًا
   if (!productExists) {
+        // تحقق بسيط للكمية المطلوبة حديثاً
+    if (requestedQuantity > availableQuantity) {
+      // إذا كانت الكمية المطلوبة حديثاً أكبر من المتوفرة
+      const errorElement = document.getElementById("quantityError");
+      errorElement.innerText = `الكمية المطلوبة (${requestedQuantity}) أكبر من المتوفرة (${availableQuantity}).`;
+      errorElement.style.display = 'block';
+ 
+   quantityInput.value = availableQuantity > 0 ? availableQuantity : 1;
+
+      return; // إيقاف الدالة ومنع الإضافة
+    }
+
     const newOrder = {
       date: productDate, // إضافة تاريخ المنتج للطلب الجديد
       name: selectedProduct,
-      quantity: quantity,
+      quantity: requestedQuantity,
       price: price,
       totalPrice: totalPrice,
     };
